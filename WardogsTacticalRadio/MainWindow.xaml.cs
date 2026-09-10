@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using WardogsTacticalRadio.Audio;
+using WardogsTacticalRadio.Input;
 using WardogsTacticalRadio.Models;
 using WardogsTacticalRadio.Networking;
 using WardogsTacticalRadio.Storage;
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
     private AppSettings _settings = new();
     private RadioSessionService? _sessionService;
     private RadioAudioService? _audioService;
+    private GlobalPttHotkeys? _hotkeys;
     private const string Version = "v0.1.0-alpha2b";
     private string _selectedTxChannel = "SQD";
     private bool _transmitting;
@@ -23,8 +25,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
-        PreviewKeyDown += MainWindow_PreviewKeyDown;
-        PreviewKeyUp += MainWindow_PreviewKeyUp;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -57,7 +57,44 @@ public partial class MainWindow : Window
             AudioStatusText.Text = $"AUDIO: ERROR ({ex.Message})";
             AudioStatusText.Foreground = (Brush)Application.Current.Resources["Red"];
         }
+
+        try
+        {
+            // See GlobalPttHotkeys for why this uses a raw keyboard hook instead of WPF's
+            // (focus-scoped) PreviewKeyDown/Up.
+            _hotkeys = new GlobalPttHotkeys([Key.F9, Key.F10]);
+            _hotkeys.KeyDown += OnHotkeyDown;
+            _hotkeys.KeyUp += OnHotkeyUp;
+            _hotkeys.Start();
+        }
+        catch (Exception ex)
+        {
+            AudioStatusText.Text = $"HOTKEYS: ERROR ({ex.Message}) // USE ON-SCREEN PTT";
+            AudioStatusText.Foreground = (Brush)Application.Current.Resources["Red"];
+        }
+
         SelectTxChannel("SQD");
+    }
+
+    // Hook callbacks already run on this (UI) thread's message loop, so Dispatcher.Invoke is
+    // just defensive here - it's a no-op re-entry, not a cross-thread marshal - kept in case
+    // hook installation ever moves off the UI thread.
+    private void OnHotkeyDown(Key key)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (key == Key.F9) { SelectTxChannel("SQD"); BeginTransmit("SQD"); }
+            else if (key == Key.F10) { SelectTxChannel("CMD"); BeginTransmit("CMD"); }
+        });
+    }
+
+    private void OnHotkeyUp(Key key)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if ((key == Key.F9 && _selectedTxChannel == "SQD") || (key == Key.F10 && _selectedTxChannel == "CMD"))
+                EndTransmit();
+        });
     }
 
     private void PopulateSocialPanels()
@@ -113,10 +150,16 @@ public partial class MainWindow : Window
     private async void HostButton_Click(object sender, RoutedEventArgs e)
     {
         if (_sessionService is null) return;
+        if (string.IsNullOrEmpty(HostPasswordBox.Password))
+        {
+            SetStatus("HOST FAILED // A SESSION PASSWORD IS REQUIRED", false);
+            return;
+        }
         try
         {
             HostButton.IsEnabled = false; JoinButton.IsEnabled = false;
-            await _sessionService.HostAsync(HostSessionNameBox.Text, _settings.ListenPort);
+            await _sessionService.HostAsync(HostSessionNameBox.Text, _settings.ListenPort, HostPasswordBox.Password);
+            DisconnectButton.IsEnabled = true;
             RememberSession(HostSessionNameBox.Text, $"{RadioSessionService.GetBestLanAddress()}:{_settings.ListenPort}");
         }
         catch (Exception ex) { SetStatus($"HOST FAILED // {ex.Message}", false); HostButton.IsEnabled = true; JoinButton.IsEnabled = true; }
@@ -130,10 +173,40 @@ public partial class MainWindow : Window
             HostButton.IsEnabled = false; JoinButton.IsEnabled = false;
             var address = JoinAddressBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(address)) address = "127.0.0.1";
-            await _sessionService.JoinAsync(address, _settings.ListenPort);
+            await _sessionService.JoinAsync(address, _settings.ListenPort, JoinPasswordBox.Password);
+            DisconnectButton.IsEnabled = true;
             RememberSession("Joined Radio Net", $"{address}:{_settings.ListenPort}");
         }
         catch (Exception ex) { SetStatus($"JOIN FAILED // {ex.Message}", false); HostButton.IsEnabled = true; JoinButton.IsEnabled = true; }
+    }
+
+    private async void DisconnectButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sessionService is null) return;
+        DisconnectButton.IsEnabled = false;
+        await _sessionService.StopAsync();
+        ResetToIdle();
+    }
+
+    // Resets the UI to idle after a deliberate disconnect. OnConnectionLost below handles the
+    // same "no active session" end state for an unexpected drop, with its own distinct
+    // messaging ("LINK LOST" vs a plain idle screen).
+    private void ResetToIdle()
+    {
+        _transmitting = false;
+        NetTitleText.Text = "NET: STANDBY";
+        RxTxLargeText.Text = "STBY";
+        ActiveCallsignText.Text = "NO ACTIVE TRANSMISSION";
+        SessionIdText.Text = "NET ID: --------";
+        LcdStatusText.Text = "SIG: ----   NET: 0   HOST: NONE";
+        LeftStatusText.Text = "● OFFLINE";
+        LeftStatusText.Foreground = (Brush)Application.Current.Resources["Amber"];
+        TxLamp.Fill = new SolidColorBrush(Color.FromRgb(72, 54, 50));
+        RxLamp.Fill = new SolidColorBrush(Color.FromRgb(50, 80, 47));
+        HostButton.IsEnabled = true;
+        JoinButton.IsEnabled = true;
+        DisconnectButton.IsEnabled = false;
+        AudioStatusText.Text = "AUDIO: READY // F9 SQD / F10 CMD";
     }
 
     private void CmdButton_Click(object sender, RoutedEventArgs e) => SelectTxChannel("CMD");
@@ -156,18 +229,6 @@ public partial class MainWindow : Window
 
     private void PttButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) { BeginTransmit(_selectedTxChannel); PttButton.CaptureMouse(); e.Handled = true; }
     private void PttButton_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e) { EndTransmit(); PttButton.ReleaseMouseCapture(); e.Handled = true; }
-
-    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.IsRepeat) return;
-        if (e.Key == Key.F9) { SelectTxChannel("SQD"); BeginTransmit("SQD"); e.Handled = true; }
-        else if (e.Key == Key.F10 && CanUseCommandNet()) { SelectTxChannel("CMD"); BeginTransmit("CMD"); e.Handled = true; }
-    }
-
-    private void MainWindow_PreviewKeyUp(object sender, KeyEventArgs e)
-    {
-        if ((e.Key == Key.F9 && _selectedTxChannel == "SQD") || (e.Key == Key.F10 && _selectedTxChannel == "CMD")) { EndTransmit(); e.Handled = true; }
-    }
 
     private void BeginTransmit(string channel)
     {
@@ -243,6 +304,7 @@ public partial class MainWindow : Window
             RxLamp.Fill = new SolidColorBrush(Color.FromRgb(50, 80, 47));
             HostButton.IsEnabled = true;
             JoinButton.IsEnabled = true;
+            DisconnectButton.IsEnabled = false;
             AudioStatusText.Text = "AUDIO: LINK LOST // REJOIN OR HOST A NET";
         });
     }
@@ -293,6 +355,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _rxResetCts?.Cancel();
+        _hotkeys?.Dispose();
         _audioService?.Dispose();
         if (_sessionService is not null) await _sessionService.DisposeAsync();
         await AppSettingsStore.SaveAsync(_settings);

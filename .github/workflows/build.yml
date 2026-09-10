@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+    branches: [ "security-fixes" ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore WardogsRadio.sln
+
+      - name: Build
+        run: dotnet build WardogsRadio.sln -c Release --no-restore
+
+      - name: Publish (self-contained win-x64)
+        run: >
+          dotnet publish WardogsTacticalRadio/WardogsTacticalRadio.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish-check
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: WardogsTacticalRadio-win-x64
+          path: publish-check/

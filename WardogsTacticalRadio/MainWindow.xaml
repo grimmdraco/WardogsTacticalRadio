@@ -44,7 +44,8 @@
                 <Button Style="{StaticResource TacticalButton}" Content="⚙  SETTINGS"/>
                 <Separator Margin="6,16" Background="#4C4E45"/>
                 <TextBlock Text="STATUS" Foreground="#888B7B" FontSize="11"/>
-                <TextBlock x:Name="LeftStatusText" Text="● OFFLINE" Foreground="{StaticResource Amber}" FontSize="13" Margin="0,4,0,14"/>
+                <TextBlock x:Name="LeftStatusText" Text="● OFFLINE" Foreground="{StaticResource Amber}" FontSize="13" Margin="0,2,0,0"/>
+                <Button x:Name="DisconnectButton" Style="{StaticResource TacticalButton}" Content="DISCONNECT" FontSize="11" Background="#5A2A24" IsEnabled="False" Margin="0,6,3,14" Click="DisconnectButton_Click"/>
                 <TextBlock Text="USERNAME" Foreground="#777A70" FontSize="10"/>
                 <TextBlock x:Name="UserNameText" Text="Operator" FontSize="14" Margin="0,1,0,10"/>
                 <TextBlock Text="CALLSIGN" Foreground="#777A70" FontSize="10"/>
@@ -156,7 +157,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="HOST RADIO NET" FontSize="14" FontWeight="Bold"/>
                     <Grid Margin="0,7,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="SESSION" VerticalAlignment="Center"/><TextBox x:Name="HostSessionNameBox" Grid.Column="1" Style="{StaticResource TacticalInput}" Text="Kirk's Radio Net"/></Grid>
-                    <Grid Margin="0,5,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="PASSWORD" VerticalAlignment="Center"/><PasswordBox x:Name="HostPasswordBox" Grid.Column="1" Style="{StaticResource TacticalPassword}" IsEnabled="False" ToolTip="Password authentication will be wired after core LAN session validation."/></Grid>
+                    <Grid Margin="0,5,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="PASSWORD" VerticalAlignment="Center"/><PasswordBox x:Name="HostPasswordBox" Grid.Column="1" Style="{StaticResource TacticalPassword}" ToolTip="Required. Anyone joining this net must enter this password."/></Grid>
                     <Button x:Name="HostButton" Style="{StaticResource TacticalButton}" Content="HOST RADIO NET" Background="#23552A" Margin="0,8,0,0" Click="HostButton_Click"/>
                     <Grid Margin="0,7,0,0">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -169,7 +170,7 @@
                 <StackPanel Grid.Column="2">
                     <TextBlock Text="JOIN RADIO NET" FontSize="14" FontWeight="Bold"/>
                     <Grid Margin="0,7,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="ADDRESS" VerticalAlignment="Center"/><TextBox x:Name="JoinAddressBox" Grid.Column="1" Style="{StaticResource TacticalInput}" Text="127.0.0.1"/></Grid>
-                    <Grid Margin="0,5,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="PASSWORD" VerticalAlignment="Center"/><PasswordBox x:Name="JoinPasswordBox" Grid.Column="1" Style="{StaticResource TacticalPassword}" IsEnabled="False"/></Grid>
+                    <Grid Margin="0,5,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="PASSWORD" VerticalAlignment="Center"/><PasswordBox x:Name="JoinPasswordBox" Grid.Column="1" Style="{StaticResource TacticalPassword}"/></Grid>
                     <Button x:Name="JoinButton" Style="{StaticResource TacticalButton}" Content="JOIN RADIO NET" Margin="0,8,0,0" Click="JoinButton_Click"/>
                 </StackPanel>
             </Grid>
